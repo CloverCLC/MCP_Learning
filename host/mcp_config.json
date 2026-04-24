@@ -13,6 +13,20 @@
         "weather.py"
       ],
       "transportType": "stdio"
+    },
+    "test": {
+      "disabled": true,
+      "timeout": 60,
+      "command": "python",
+      "args": [
+        "E:/gitlab/mcp_learning/mcp_logger.py",
+        "uv",
+        "--directory",
+        "E:/gitlab/mcp_learning/mcp",
+        "run",
+        "weather.py"
+      ],
+      "transportType": "stdio"
     }
   }
 }
