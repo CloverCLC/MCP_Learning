@@ -79,16 +79,43 @@ class MCPClientManager:
                 print(f"[{name}] 连接错误: {type(e).__name__} - {e}")
 
     async def chat_loop(self):
-        #持续接收用户输入并调用 LLM
+        # 持续接收用户输入并调用 LLM
         if not hasattr(self, 'sessions') or not self.sessions:
-            print("\n没有可用的 MCP Server,退出.")
+            print("\n没有可用的 MCP Server, 退出.")
             return
 
-        print("\n所有服务连接完毕!输入你的问题(输入 'quit' 退出):")
+        # 1. 读取系统提示词
+        sys_prompt_path = Path(SYSTEM_PROMPT_PATH)
+        if not sys_prompt_path.exists():
+            print(f"找不到系统提示词文件: {sys_prompt_path}")
+            return
+        with open(sys_prompt_path, "r", encoding="utf-8") as f:
+            sys_prompt = f.read()
+
+        # 2. 把工具列表格式化为纯文本拼接到提示词 (修复了原代码 tools_string 未定义的 bug)
+        tools_str_list = []
+        for tools in self.tools_by_name.values():
+            for tool in tools:
+                tool_desc = (
+                    f"工具名: {tool.name}\n"
+                    f"描述: {tool.description}\n"
+                    f"参数: {json.dumps(tool.inputSchema, ensure_ascii=False)}\n"
+                    "--------------------"
+                )
+                tools_str_list.append(tool_desc)
+        
+        final_system_prompt = f"""
+{sys_prompt}
+
+# 可用工具列表
+{chr(10).join(tools_str_list)}
+        """
+
+        print("\n所有服务连接完毕! 输入你的问题 (输入 'quit' 退出):\n")
 
         while True:
             try:
-                user_msg = input("\ninput: ")
+                user_msg = input("input: ")
             except (EOFError, KeyboardInterrupt):
                 break
 
@@ -98,39 +125,103 @@ class MCPClientManager:
             if not user_msg.strip():
                 continue
 
-            all_tools = []
-            tools_str_list = []
-            for tools in self.tools_by_name.values():
-                for tool in tools:
-                    # 把每个工具格式化为易读的文本，例如：
-                    # 工具名: get_weather
-                    # 描述: 获取指定城市的天气信息
-                    # 参数: {"location": "城市名称", "unit": "温度单位"}
-                    tool_desc = (
-                        f"工具名: {tool.name}\n"
-                        f"描述: {tool.description}\n"
-                        f"参数: {json.dumps(tool.inputSchema, ensure_ascii=False)}\n"
-                        "--------------------"
-                    )
-                    tools_str_list.append(tool_desc)
-            
-            # 把所有工具的文本用换行符拼成一个超级长的字符串
-            tools_string = "\n".join(tools_str_list)
-            sys_prompt_path = Path(SYSTEM_PROMPT_PATH)
-            # 将工具字符串拼接到系统提示词中
-            with open(sys_prompt_path, "r", encoding="utf-8") as f:
-                sys_prompt = f.read()
-            final_system_prompt = f"""
-{sys_prompt}
-#可用工具列表
-{tools_string}
-            """
-            print(final_system_prompt)
-            try:
-                res = await run_llm(final_system_prompt, user_msg)
-                print(res)
-            except Exception as e:
-                print(f"LLM 调用发生错误: {e}")
+            # ============ Agent 循环开始 ============
+            MAX_ROUNDS = 5  # 防止 LLM 陷入死循环，最多连续调用 5 次工具
+            current_prompt = user_msg
+            final_answer_found = False
+
+            for round_idx in range(MAX_ROUNDS):
+                try:
+                    # 调用 LLM
+                    llm_res = await run_llm(final_system_prompt, current_prompt)
+                except Exception as e:
+                    print(f"[Host] LLM 调用发生错误: {e}")
+                    break
+
+                # -----------------------------------------
+                # 核心解析逻辑：找出所有 XML 块，过滤掉 thinking 标签
+                # -----------------------------------------
+                xml_pattern = r"<(\w+)>([\s\S]*?)</\1>"
+                all_matches = re.findall(xml_pattern, llm_res)
+                
+                real_tool_name = None
+                real_arguments = {}
+                
+                # 遍历找到的所有 XML 块，寻找真正的工具调用
+                for tag_name, tag_content in all_matches:
+                    tag_name = tag_name.strip().lower()
+                    tag_content = tag_content.strip()
+                    
+                    # 1. 跳过黑名单标签（如 thinking，用 continue 而不是 break，继续往后找）
+                    blacklist = ["thinking", "thought", "reflection", "system"]
+                    if tag_name in blacklist:
+                        continue
+                        
+                    # 2. 跳过空标签
+                    if not tag_content:
+                        continue
+                        
+                    # 3. 找到了疑似工具！提取里面的子标签作为参数
+                    arg_pattern = r"<(\w+)>([\s\S]*?)</\1>"
+                    arg_matches = re.findall(arg_pattern, tag_content)
+                    
+                    # 简单校验：如果里面有子标签（说明有参数），才认定它是工具
+                    if arg_matches:
+                        real_tool_name = tag_name
+                        real_arguments = {key: value.strip() for key, value in arg_matches}
+                        break # 找到第一个合法工具就停止查找
+
+                # -----------------------------------------
+                # 根据查找结果执行对应逻辑
+                # -----------------------------------------
+                if real_tool_name:
+                    # --- 成功解析到工具 ---
+                    print(f"\n[Host] 检测到工具调用 (第 {round_idx + 1} 轮): {real_tool_name}({json.dumps(real_arguments, ensure_ascii=False)})")
+                    
+                    # 调用你写好的 execute_tool 执行
+                    tool_result = await self.execute_tool(real_tool_name, real_arguments)
+                    
+                    if tool_result:
+                        # 提取 MCP 返回对象里的纯文本
+                        result_text = ""
+                        if hasattr(tool_result, 'content'):
+                            for item in tool_result.content:
+                                if hasattr(item, 'text'):
+                                    result_text += item.text
+                                else:
+                                    result_text += str(item)
+                        else:
+                            result_text = str(tool_result)
+                            
+                        # 打印一点返回结果，让你知道工具跑通了（避免刷屏只打印前300字）
+                        print(f"[Host] 工具返回结果: {result_text[:300]}{'...' if len(result_text) > 300 else ''}")
+                        
+                        # 拼装下一轮的 prompt，把真实数据喂回给 LLM
+                        current_prompt = f"""用户最初的问题: {user_msg}
+我帮你调用了工具 {real_tool_name}，返回的真实结果如下：
+<tool_result>
+{result_text}
+</tool_result>
+
+请根据上述真实结果回答用户的问题。如果不需要再调用其他工具，请直接给出最终答案。"""
+                    else:
+                        # 工具执行失败
+                        print("[Host] 错误: 工具执行失败或找不到工具")
+                        print(f"[LLM 原始输出]: {llm_res.strip()}")
+                        final_answer_found = True
+                        break
+                        
+                else:
+                    # --- 没有找到任何工具调用，说明 LLM 直接给出了最终文本回答 ---
+                    print(f"\nLLM: {llm_res.strip()}")
+                    final_answer_found = True
+                    break
+
+            # 如果跑完了最大轮数，LLM 还在死循环调工具，强制打断
+            if not final_answer_found:
+                print("\n[Host 警告] 已达到最大工具调用次数限制，强制停止。")
+            # ============ Agent 循环结束 ============
+
     async def execute_tool(self, tool_name: str, arguments: dict):
         #根据工具名在所有连接的 MCP Server 中寻找并执行
         for name, tools in self.tools_by_name.items():
