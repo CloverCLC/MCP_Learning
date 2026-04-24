@@ -84,7 +84,7 @@ class MCPClientManager:
             print("\n没有可用的 MCP Server, 退出.")
             return
 
-        # 1. 读取系统提示词
+        # 读取系统提示词
         sys_prompt_path = Path(SYSTEM_PROMPT_PATH)
         if not sys_prompt_path.exists():
             print(f"找不到系统提示词文件: {sys_prompt_path}")
@@ -92,7 +92,7 @@ class MCPClientManager:
         with open(sys_prompt_path, "r", encoding="utf-8") as f:
             sys_prompt = f.read()
 
-        # 2. 把工具列表格式化为纯文本拼接到提示词 (修复了原代码 tools_string 未定义的 bug)
+        # 把工具列表格式化为纯文本拼接到提示词
         tools_str_list = []
         for tools in self.tools_by_name.values():
             for tool in tools:
@@ -126,7 +126,7 @@ class MCPClientManager:
                 continue
 
             # ============ Agent 循环开始 ============
-            MAX_ROUNDS = 5  # 防止 LLM 陷入死循环，最多连续调用 5 次工具
+            MAX_ROUNDS = 5  # 防止 LLM 陷入死循环
             current_prompt = user_msg
             final_answer_found = False
 
@@ -138,9 +138,7 @@ class MCPClientManager:
                     print(f"[Host] LLM 调用发生错误: {e}")
                     break
 
-                # -----------------------------------------
                 # 核心解析逻辑：找出所有 XML 块，过滤掉 thinking 标签
-                # -----------------------------------------
                 xml_pattern = r"<(\w+)>([\s\S]*?)</\1>"
                 all_matches = re.findall(xml_pattern, llm_res)
                 
@@ -152,33 +150,30 @@ class MCPClientManager:
                     tag_name = tag_name.strip().lower()
                     tag_content = tag_content.strip()
                     
-                    # 1. 跳过黑名单标签（如 thinking，用 continue 而不是 break，继续往后找）
-                    blacklist = ["thinking", "thought", "reflection", "system"]
+                    # 跳过黑名单标签
+                    blacklist = ["thinking"]
                     if tag_name in blacklist:
                         continue
                         
-                    # 2. 跳过空标签
+                    # 跳过空标签
                     if not tag_content:
                         continue
                         
-                    # 3. 找到了疑似工具！提取里面的子标签作为参数
+                    # 找到了疑似工具,提取里面的子标签作为参数
                     arg_pattern = r"<(\w+)>([\s\S]*?)</\1>"
                     arg_matches = re.findall(arg_pattern, tag_content)
                     
-                    # 简单校验：如果里面有子标签（说明有参数），才认定它是工具
+                    # 简单校验:如果里面有子标签,才认定它是工具
                     if arg_matches:
                         real_tool_name = tag_name
                         real_arguments = {key: value.strip() for key, value in arg_matches}
                         break # 找到第一个合法工具就停止查找
 
-                # -----------------------------------------
                 # 根据查找结果执行对应逻辑
-                # -----------------------------------------
                 if real_tool_name:
-                    # --- 成功解析到工具 ---
                     print(f"\n[Host] 检测到工具调用 (第 {round_idx + 1} 轮): {real_tool_name}({json.dumps(real_arguments, ensure_ascii=False)})")
                     
-                    # 调用你写好的 execute_tool 执行
+                    # 调用 execute_tool 执行
                     tool_result = await self.execute_tool(real_tool_name, real_arguments)
                     
                     if tool_result:
@@ -193,10 +188,9 @@ class MCPClientManager:
                         else:
                             result_text = str(tool_result)
                             
-                        # 打印一点返回结果，让你知道工具跑通了（避免刷屏只打印前300字）
                         print(f"[Host] 工具返回结果: {result_text[:300]}{'...' if len(result_text) > 300 else ''}")
                         
-                        # 拼装下一轮的 prompt，把真实数据喂回给 LLM
+                        # 拼装下一轮的 prompt,把数据喂回给 LLM
                         current_prompt = f"""用户最初的问题: {user_msg}
 我帮你调用了工具 {real_tool_name}，返回的真实结果如下：
 <tool_result>
@@ -212,7 +206,7 @@ class MCPClientManager:
                         break
                         
                 else:
-                    # --- 没有找到任何工具调用，说明 LLM 直接给出了最终文本回答 ---
+                    # 没有找到任何工具调用,说明 LLM 直接给出了最终文本回答
                     print(f"\nLLM: {llm_res.strip()}")
                     final_answer_found = True
                     break
@@ -239,7 +233,7 @@ class MCPClientManager:
     async def cleanup(self):
         #按 LIFO 顺序退出所有上下文管理器
         print("\n正在断开所有 MCP Server 连接...")
-        # 后进先出，先退 session 再退 stdio
+        # 后进先出,先退 session 再退 stdio
         for kind, name, cm in reversed(self._stack):
             try:
                 await cm.__aexit__(None, None, None)
@@ -251,14 +245,13 @@ async def main():
     manager = MCPClientManager()
     
     try:
-        # 1. 启动并连接所有服务
+        # 启动并连接所有服务
         await manager.connect_servers()
-        # 2. 进入聊天循环
+        # 进入聊天循环
         await manager.chat_loop()
     finally:
-        # 3. 无论是否报错，最后都要清理子进程
+        # 无论是否报错，最后都要清理子进程
         await manager.cleanup()
 
 if __name__ == "__main__":
-    # 整个程序的生命周期都在这一个 asyncio.run 里面
     asyncio.run(main())
