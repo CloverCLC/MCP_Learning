@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+mcp_io.log
+format.json
