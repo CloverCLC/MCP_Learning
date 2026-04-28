@@ -67,7 +67,7 @@ async def main():
 {tool}
 """
     user_msg = '纽约明天天气怎么样'
-    result =await run_llm(sys_prompt,user_msg)
+    result = await run_llm(sys_prompt,user_msg)
     print(result)
 
     # for chunk in completion:

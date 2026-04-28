@@ -12,3 +12,5 @@ wheels/
 # test file
 format.json
 mcp_io.log
+test.py
+weather_cn.py

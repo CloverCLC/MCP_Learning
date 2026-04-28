@@ -14,19 +14,17 @@
       ],
       "transportType": "stdio"
     },
-    "test": {
-      "disabled": true,
+    "cn_weather": {
+      "disabled": false,
       "timeout": 60,
-      "command": "python",
+      "type": "stdio",
+      "command": "uv",
       "args": [
-        "E:/gitlab/mcp_learning/mcp_logger.py",
-        "uv",
         "--directory",
         "E:/gitlab/mcp_learning/mcp",
         "run",
-        "weather.py"
-      ],
-      "transportType": "stdio"
+        "cn_weather.py"
+      ]
     }
   }
 }

@@ -5,7 +5,10 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "cryptography>=46.0.7",
     "httpx>=0.28.1",
     "mcp[cli]>=1.27.0",
     "openai>=2.32.0",
+    "pyjwt>=2.12.1",
+    "requests>=2.33.1",
 ]

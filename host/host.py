@@ -3,6 +3,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import asyncio
+
+
 import re
 import json
 from pathlib import Path
@@ -110,7 +112,7 @@ class MCPClientManager:
 # 可用工具列表
 {chr(10).join(tools_str_list)}
         """
-
+        print(final_system_prompt)
         print("\n所有服务连接完毕! 输入你的问题 (输入 'quit' 退出):\n")
 
         while True:
@@ -126,7 +128,7 @@ class MCPClientManager:
                 continue
 
             # ============ Agent 循环开始 ============
-            MAX_ROUNDS = 5  # 防止 LLM 陷入死循环
+            MAX_ROUNDS = 10  # 防止 LLM 陷入死循环
             current_prompt = user_msg
             final_answer_found = False
 
@@ -134,6 +136,7 @@ class MCPClientManager:
                 try:
                     # 调用 LLM
                     llm_res = await run_llm(final_system_prompt, current_prompt)
+
                 except Exception as e:
                     print(f"[Host] LLM 调用发生错误: {e}")
                     break
