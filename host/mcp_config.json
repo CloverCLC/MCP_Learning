@@ -5,12 +5,12 @@
       "timeout": 60,
       "command": "python",
       "args": [
-        "E:/gitlab/mcp_learning/mcp_logger.py",
+        "mcp_logger.py",  
         "uv",
         "--directory",
-        "E:/gitlab/mcp_learning/mcp",
+        "mcp",
         "run",
-        "weather.py"
+        "../mcp/weather.py"
       ],
       "transportType": "stdio"
     },
@@ -21,9 +21,9 @@
       "command": "uv",
       "args": [
         "--directory",
-        "E:/gitlab/mcp_learning/mcp",
+        "mcp",
         "run",
-        "cn_weather.py"
+        "../mcp/cn_weather.py"
       ]
     }
   }

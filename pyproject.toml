@@ -9,6 +9,4 @@ dependencies = [
     "httpx>=0.28.1",
     "mcp[cli]>=1.27.0",
     "openai>=2.32.0",
-    "pyjwt>=2.12.1",
-    "requests>=2.33.1",
 ]

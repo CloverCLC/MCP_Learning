@@ -127,6 +127,8 @@ class MCPClientManager:
             if not user_msg.strip():
                 continue
 
+            
+
             # ============ Agent 循环开始 ============
             MAX_ROUNDS = 10  # 防止 LLM 陷入死循环
             current_prompt = user_msg
@@ -136,7 +138,8 @@ class MCPClientManager:
                 try:
                     # 调用 LLM
                     llm_res = await run_llm(final_system_prompt, current_prompt)
-
+                    print("\nLLM开始调用工具\n")
+                    print(llm_res)
                 except Exception as e:
                     print(f"[Host] LLM 调用发生错误: {e}")
                     break

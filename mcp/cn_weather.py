@@ -1,4 +1,5 @@
 from typing import Any
+import json
 import httpx
 from mcp.server.fastmcp import FastMCP
 
@@ -18,18 +19,39 @@ async def make_cma_request(url: str) -> dict[str, Any] | None:
         try:
             response = await client.get(url, headers=headers, timeout=30.0)
             response.raise_for_status()
-            print(response.json())
-            return response.json()
-        except Exception:
-            return None
 
+            return response.json()
+        except json.JSONDecodeError:
+            # 响应不是合法的 JSON（大概率是接口报错返回了 HTML 或纯文本）
+            return f"API返回数据格式错误(非JSON),原始内容前100字符: {response.text[:100]}"
+            
+        except httpx.HTTPStatusError as e:
+            # 专门处理 HTTP 状态码错误 (400, 401, 403, 404, 500等)
+            # 尝试从和风天气的错误响应体里提取错误信息
+            try:
+                error_msg = e.response.json().get("message", "无详细说明")
+            except:
+                error_msg = e.response.text[:100]
+            return f"API请求失败,状态码: {e.response.status_code},原因: {error_msg}"
+            
+        except httpx.TimeoutException:
+            # 专门处理超时
+            return "请求和风天气API超时,请稍后重试或检查网络。"
+            
+        except httpx.ConnectError:
+            # 专门处理连接失败 (DNS解析失败、拒绝连接等)
+            return "无法连接到和风天气API服务器,请检查网络连接。"
+            
+        except Exception as e:
+            # 兜底处理其他未知异常 (一定不要吞掉,要把错误信息带出去)
+            return f"发生未知异常: {type(e).__name__} - {str(e)}"
 
 @mcp.tool()
 async def get_weather_now(location: int) -> str:
     """Get weather now for a LocationID.
 
     Args:
-        location: 该地天气的LocationID,如果没有就先使用get_location_id工具获取LocationID
+        location: 该地天气的LocationID,如果没有就先使用get_location_id工具获取LocationID(仅限中国地区使用)
     """
     url = f"{CMA_API_BASE}/v7/weather/now?location={location}"
     data = await make_cma_request(url)
@@ -65,42 +87,6 @@ async def get_location_id(city:str) -> str:
         # 返回第一个匹配城市的ID
         return str(location_info[0].get("id", "not found"))
     return str(location_info)
-
-# @mcp.tool()
-# async def get_forecast(latitude: float, longitude: float) -> str:
-#     """Get weather forecast for a location.
-
-#     Args:
-#         latitude: Latitude of the location
-#         longitude: Longitude of the location
-#     """
-#     # First get the forecast grid endpoint
-#     points_url = f"{CMA_API_BASE}/points/{latitude},{longitude}"
-#     points_data = await make_cma_request(points_url)
-
-#     if not points_data:
-#         return "Unable to fetch forecast data for this location."
-
-#     # Get the forecast URL from the points response
-#     forecast_url = points_data["properties"]["forecast"]
-#     forecast_data = await make_cma_request(forecast_url)
-
-#     if not forecast_data:
-#         return "Unable to fetch detailed forecast."
-
-#     # Format the periods into a readable forecast
-#     periods = forecast_data["properties"]["periods"]
-#     forecasts = []
-#     for period in periods[:5]:  # Only show next 5 periods
-#         forecast = f"""
-# {period['name']}:
-# Temperature: {period['temperature']}°{period['temperatureUnit']}
-# Wind: {period['windSpeed']} {period['windDirection']}
-# Forecast: {period['detailedForecast']}
-# """
-#         forecasts.append(forecast)
-
-#     return "\n---\n".join(forecasts)
 
 
 if __name__ == "__main__":
