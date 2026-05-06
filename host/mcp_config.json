@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "weather": {
+      "disabled": false,
+      "timeout": 60,
+      "command": "python",
+      "args": [
+        "mcp_logger.py",  
+        "uv",
+        "--directory",
+        "mcp",
+        "run",
+        "../mcp/weather.py"
+      ],
+      "transportType": "stdio"
+    },
+    "cn_weather": {
+      "disabled": false,
+      "timeout": 60,
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "mcp",
+        "run",
+        "../mcp/cn_weather.py"
+      ]
+    }
+  }
+}
