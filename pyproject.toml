@@ -4,4 +4,9 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "cryptography>=46.0.7",
+    "httpx>=0.28.1",
+    "mcp[cli]>=1.27.0",
+    "openai>=2.32.0",
+]

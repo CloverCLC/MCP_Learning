@@ -9,5 +9,8 @@ wheels/
 # Virtual environments
 .venv
 
-mcp_io.log
+# test file
 format.json
+mcp_io.log
+test.py
+weather_cn.py
